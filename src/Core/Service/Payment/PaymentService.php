@@ -21,7 +21,6 @@ use App\Core\Service\Logs\LogService;
 use App\Core\Service\SettingService;
 use App\Core\Service\Voucher\VoucherPaymentService;
 use Symfony\Component\HttpFoundation\File\UploadedFile;
-use Symfony\Component\HttpFoundation\File\UploadedFile;
 use Symfony\Component\Messenger\MessageBusInterface;
 use Symfony\Contracts\Translation\TranslatorInterface;
 
@@ -193,114 +192,6 @@ class PaymentService
         }
 
         $this->paymentRepository->save($payment);
-    }
-
-    public function createManualPayment(
-        UserInterface $user,
-        float $amount,
-        string $currency,
-        string $voucherCode,
-        ?UploadedFile $proofImage,
-        ?string $manualInstructions,
-    ): void {
-        $this->userVerificationService->validateUserVerification($user);
-
-        $balanceAmount = $amount;
-        if (!empty($voucherCode)) {
-            $this->voucherPaymentService->validateVoucherCode(
-                $voucherCode,
-                $user,
-                VoucherTypeEnum::PAYMENT_DISCOUNT,
-            );
-            $amount = $this->voucherPaymentService->redeemPaymentVoucher($amount, $voucherCode, $user);
-        }
-
-        $this->logService->logAction(
-            $user,
-            LogActionEnum::CREATE_PAYMENT,
-            [
-                'amount' => $amount,
-                'currency' => $currency,
-                'provider' => 'manual',
-                'balanceAmount' => $balanceAmount,
-                'voucherCode' => $voucherCode,
-            ]
-        );
-
-        if (!empty($voucherCode)) {
-            $voucher = $this->voucherPaymentService->getVoucher($voucherCode);
-        }
-
-        $sessionId = sprintf('MANUAL-%s', bin2hex(random_bytes(8)));
-
-        $payment = (new Payment())
-            ->setAmount($amount)
-            ->setCurrency($currency)
-            ->setBalanceAmount($balanceAmount)
-            ->setSessionId($sessionId)
-            ->setUser($user)
-            ->setStatus(PaymentStatusEnum::UNPAID->value)
-            ->setProvider('manual')
-            ->setManualInstructions($manualInstructions);
-
-        if (!empty($voucher)) {
-            $payment->setUsedVoucher($voucher);
-        }
-
-        if ($proofImage) {
-            $payment->setManualProofFile($proofImage);
-        }
-
-        $this->paymentRepository->save($payment);
-    }
-
-    public function approveManualPayment(Payment $payment): ?string
-    {
-        if ($payment->getProvider() !== 'manual') {
-            return $this->translator->trans('pteroca.recharge.payment_not_found');
-        }
-
-        if ($payment->getStatus() === PaymentStatusEnum::PAID->value) {
-            return $this->translator->trans('pteroca.recharge.payment_already_processed');
-        }
-
-        $user = $payment->getUser();
-        $amount = $payment->getBalanceAmount();
-        $newBalance = $user->getBalance() + $amount;
-        $user->setBalance($newBalance);
-        $this->userRepository->save($user);
-
-        $emailMessage = new SendEmailMessage(
-            $user->getEmail(),
-            $this->translator->trans('pteroca.email.payment.subject'),
-            'email/payment_success.html.twig',
-            [
-                'amount' => $amount,
-                'currency' => $payment->getCurrency(),
-                'internalCurrency' => $this->settingService
-                    ->getSetting(SettingEnum::INTERNAL_CURRENCY_NAME->value),
-                'user' => $user,
-            ],
-        );
-        $this->messageBus->dispatch($emailMessage);
-
-        $this->emailNotificationService->logEmailSent(
-            $user,
-            EmailTypeEnum::PAYMENT_SUCCESS,
-            null,
-            $this->translator->trans('pteroca.email.payment.subject')
-        );
-
-        $this->logService->logAction(
-            $user,
-            LogActionEnum::BOUGHT_BALANCE,
-            ['amount' => $amount, 'currency' => $payment->getCurrency(), 'newBalance' => $newBalance]
-        );
-
-        $payment->setStatus(PaymentStatusEnum::PAID->value);
-        $this->paymentRepository->save($payment);
-
-        return null;
     }
 
     public function createManualPayment(
