@@ -20,6 +20,8 @@ use App\Core\Service\Email\EmailNotificationService;
 use App\Core\Service\Logs\LogService;
 use App\Core\Service\SettingService;
 use App\Core\Service\Voucher\VoucherPaymentService;
+use Symfony\Component\HttpFoundation\File\UploadedFile;
+use Symfony\Component\HttpFoundation\File\UploadedFile;
 use Symfony\Component\Messenger\MessageBusInterface;
 use Symfony\Contracts\Translation\TranslatorInterface;
 
@@ -183,12 +185,231 @@ class PaymentService
             ->setBalanceAmount($balanceAmount)
             ->setSessionId($session->getId())
             ->setUser($user)
-            ->setStatus($session->getPaymentStatus());
+            ->setStatus($session->getPaymentStatus())
+            ->setProvider('stripe');
 
         if (!empty($voucher)) {
             $payment->setUsedVoucher($voucher);
         }
 
         $this->paymentRepository->save($payment);
+    }
+
+    public function createManualPayment(
+        UserInterface $user,
+        float $amount,
+        string $currency,
+        string $voucherCode,
+        ?UploadedFile $proofImage,
+        ?string $manualInstructions,
+    ): void {
+        $this->userVerificationService->validateUserVerification($user);
+
+        $balanceAmount = $amount;
+        if (!empty($voucherCode)) {
+            $this->voucherPaymentService->validateVoucherCode(
+                $voucherCode,
+                $user,
+                VoucherTypeEnum::PAYMENT_DISCOUNT,
+            );
+            $amount = $this->voucherPaymentService->redeemPaymentVoucher($amount, $voucherCode, $user);
+        }
+
+        $this->logService->logAction(
+            $user,
+            LogActionEnum::CREATE_PAYMENT,
+            [
+                'amount' => $amount,
+                'currency' => $currency,
+                'provider' => 'manual',
+                'balanceAmount' => $balanceAmount,
+                'voucherCode' => $voucherCode,
+            ]
+        );
+
+        if (!empty($voucherCode)) {
+            $voucher = $this->voucherPaymentService->getVoucher($voucherCode);
+        }
+
+        $sessionId = sprintf('MANUAL-%s', bin2hex(random_bytes(8)));
+
+        $payment = (new Payment())
+            ->setAmount($amount)
+            ->setCurrency($currency)
+            ->setBalanceAmount($balanceAmount)
+            ->setSessionId($sessionId)
+            ->setUser($user)
+            ->setStatus(PaymentStatusEnum::UNPAID->value)
+            ->setProvider('manual')
+            ->setManualInstructions($manualInstructions);
+
+        if (!empty($voucher)) {
+            $payment->setUsedVoucher($voucher);
+        }
+
+        if ($proofImage) {
+            $payment->setManualProofFile($proofImage);
+        }
+
+        $this->paymentRepository->save($payment);
+    }
+
+    public function approveManualPayment(Payment $payment): ?string
+    {
+        if ($payment->getProvider() !== 'manual') {
+            return $this->translator->trans('pteroca.recharge.payment_not_found');
+        }
+
+        if ($payment->getStatus() === PaymentStatusEnum::PAID->value) {
+            return $this->translator->trans('pteroca.recharge.payment_already_processed');
+        }
+
+        $user = $payment->getUser();
+        $amount = $payment->getBalanceAmount();
+        $newBalance = $user->getBalance() + $amount;
+        $user->setBalance($newBalance);
+        $this->userRepository->save($user);
+
+        $emailMessage = new SendEmailMessage(
+            $user->getEmail(),
+            $this->translator->trans('pteroca.email.payment.subject'),
+            'email/payment_success.html.twig',
+            [
+                'amount' => $amount,
+                'currency' => $payment->getCurrency(),
+                'internalCurrency' => $this->settingService
+                    ->getSetting(SettingEnum::INTERNAL_CURRENCY_NAME->value),
+                'user' => $user,
+            ],
+        );
+        $this->messageBus->dispatch($emailMessage);
+
+        $this->emailNotificationService->logEmailSent(
+            $user,
+            EmailTypeEnum::PAYMENT_SUCCESS,
+            null,
+            $this->translator->trans('pteroca.email.payment.subject')
+        );
+
+        $this->logService->logAction(
+            $user,
+            LogActionEnum::BOUGHT_BALANCE,
+            ['amount' => $amount, 'currency' => $payment->getCurrency(), 'newBalance' => $newBalance]
+        );
+
+        $payment->setStatus(PaymentStatusEnum::PAID->value);
+        $this->paymentRepository->save($payment);
+
+        return null;
+    }
+
+    public function createManualPayment(
+        UserInterface $user,
+        float $amount,
+        string $currency,
+        string $voucherCode,
+        ?UploadedFile $proofFile = null,
+    ): void {
+        $this->userVerificationService->validateUserVerification($user);
+        $balanceAmount = $amount;
+        if (!empty($voucherCode)) {
+            $this->voucherPaymentService->validateVoucherCode(
+                $voucherCode,
+                $user,
+                VoucherTypeEnum::PAYMENT_DISCOUNT,
+            );
+            $amount = $this->voucherPaymentService->redeemPaymentVoucher($amount, $voucherCode, $user);
+        }
+
+        if (!empty($voucherCode)) {
+            $voucher = $this->voucherPaymentService->getVoucher($voucherCode);
+        }
+
+        $payment = (new Payment())
+            ->setSessionId('manual_' . bin2hex(random_bytes(8)))
+            ->setProvider('manual')
+            ->setAmount($amount)
+            ->setCurrency($currency)
+            ->setBalanceAmount($balanceAmount)
+            ->setUser($user)
+            ->setStatus(PaymentStatusEnum::UNPAID->value)
+            ->setManualInstructions($this->settingService->getSetting(SettingEnum::MANUAL_PAYMENT_INSTRUCTIONS->value));
+
+        if (!empty($voucher)) {
+            $payment->setUsedVoucher($voucher);
+        }
+
+        if ($proofFile) {
+            $payment->setManualProofFile($proofFile);
+        }
+
+        $this->paymentRepository->save($payment);
+
+        $this->logService->logAction(
+            $user,
+            LogActionEnum::CREATE_PAYMENT,
+            [
+                'amount' => $amount,
+                'currency' => $currency,
+                'sessionId' => $payment->getSessionId(),
+                'balanceAmount' => $balanceAmount,
+                'voucherCode' => $voucherCode,
+                'provider' => 'manual',
+            ]
+        );
+    }
+
+    public function approveManualPayment(Payment $payment): ?string
+    {
+        if ($payment->getProvider() !== 'manual') {
+            return $this->translator->trans('pteroca.manual_processing.invalid_provider');
+        }
+
+        if ($payment->getStatus() === PaymentStatusEnum::PAID->value) {
+            return $this->translator->trans('pteroca.manual_processing.already_paid');
+        }
+
+        $requireProof = $this->settingService->getSetting(SettingEnum::MANUAL_PAYMENT_REQUIRE_PROOF->value);
+        if ($requireProof && empty($payment->getManualProofPath())) {
+            return $this->translator->trans('pteroca.manual_processing.missing_proof');
+        }
+
+        $user = $payment->getUser();
+        $amount = $payment->getBalanceAmount();
+        $newBalance = $user->getBalance() + $amount;
+        $user->setBalance($newBalance);
+        $this->userRepository->save($user);
+
+        $emailMessage = new SendEmailMessage(
+            $user->getEmail(),
+            $this->translator->trans('pteroca.email.payment.subject'),
+            'email/payment_success.html.twig',
+            [
+                'amount' => $amount,
+                'currency' => $payment->getCurrency(),
+                'internalCurrency' => $this->settingService
+                    ->getSetting(SettingEnum::INTERNAL_CURRENCY_NAME->value),
+                'user' => $user,
+            ],
+        );
+        $this->messageBus->dispatch($emailMessage);
+
+        $this->emailNotificationService->logEmailSent(
+            $user,
+            EmailTypeEnum::PAYMENT_SUCCESS,
+            null,
+            $this->translator->trans('pteroca.email.payment.subject')
+        );
+
+        $this->logService->logAction(
+            $user,
+            LogActionEnum::BOUGHT_BALANCE,
+            ['amount' => $amount, 'currency' => $payment->getCurrency(), 'newBalance' => $newBalance]
+        );
+
+        $payment->setStatus(PaymentStatusEnum::PAID->value);
+        $this->paymentRepository->save($payment);
+
+        return null;
     }
 }

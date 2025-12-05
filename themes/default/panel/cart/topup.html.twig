@@ -28,7 +28,7 @@
             </div>
         </div>
 
-        <form action="{{ path('panel', { routeName: 'cart_topup' }) }}" method="post">
+        <form action="{{ path('panel', { routeName: 'cart_topup' }) }}" method="post" enctype="multipart/form-data">
             <input type="hidden" name="amount" value="{{ request.amount }}" id="topup-amount">
             <input type="hidden" name="currency" value="{{ request.currency }}">
             <input type="hidden" name="voucher" value="" id="voucher-code" data-voucher-type="payment_discount">
@@ -79,11 +79,11 @@
                                 <div class="col-12 col-sm-6 col-md-6 col-lg-4">
                                     <input type="radio"
                                            name="payment_provider"
-                                           id="provider1"
-                                           value="provider1"
+                                           id="provider_stripe"
+                                           value="stripe"
                                            class="card-input-element d-none"
                                            checked>
-                                    <label for="provider1" class="card border-2 shadow-sm rounded-3 card-input h-100">
+                                    <label for="provider_stripe" class="card border-2 shadow-sm rounded-3 card-input h-100">
                                         <div class="card-body text-center p-4">
                                             <img src="{{ asset('assets/img/payments/stripe.svg') }}"
                                                  alt="Stripe"
@@ -93,7 +93,36 @@
                                         </div>
                                     </label>
                                 </div>
+                                {% if manualPaymentEnabled %}
+                                <div class="col-12 col-sm-6 col-md-6 col-lg-4">
+                                    <input type="radio"
+                                           name="payment_provider"
+                                           id="provider_manual"
+                                           value="manual"
+                                           class="card-input-element d-none">
+                                    <label for="provider_manual" class="card border-2 shadow-sm rounded-3 card-input h-100">
+                                        <div class="card-body text-center p-4">
+                                            <i class="fas fa-money-bill-wave mb-3" style="font-size: 1.6rem;"></i>
+                                            <h6 class="card-title mb-0 fw-semibold">{{ 'pteroca.cart_topup.manual_payment'|trans }}</h6>
+                                        </div>
+                                    </label>
+                                </div>
+                                {% endif %}
                             </div>
+                            {% if manualPaymentEnabled %}
+                            <div id="manual-instructions-container" class="mt-3 d-none">
+                                <div class="alert alert-info" role="alert">
+                                    <div class="fw-semibold mb-2">{{ 'pteroca.cart_topup.manual_instructions'|trans }}</div>
+                                    <div class="small">{{ manualInstructions|raw }}</div>
+                                </div>
+                                {% if manualProofRequired %}
+                                <div class="mb-3">
+                                    <label class="form-label fw-semibold">{{ 'pteroca.cart_topup.upload_proof'|trans }}</label>
+                                    <input type="file" name="manual_proof" class="form-control">
+                                </div>
+                                {% endif %}
+                            </div>
+                            {% endif %}
                         </div>
                     </div>
                 </div>
@@ -220,6 +249,14 @@
                 const label = document.querySelector(`label[for="${selectedRadio.id}"]`);
                 const methodName = label.querySelector('.card-title').textContent;
                 document.querySelector('#selected-payment-method').textContent = methodName;
+                const container = document.querySelector('#manual-instructions-container');
+                if (container) {
+                    if (selectedRadio.value === 'manual') {
+                        container.classList.remove('d-none');
+                    } else {
+                        container.classList.add('d-none');
+                    }
+                }
             }
         }
     </script>

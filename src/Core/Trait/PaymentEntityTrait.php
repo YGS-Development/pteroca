@@ -6,6 +6,8 @@ use App\Core\Contract\UserInterface;
 use App\Core\Entity\User;
 use App\Core\Entity\Voucher;
 use Doctrine\ORM\Mapping as ORM;
+use Symfony\Component\HttpFoundation\File\File;
+use Vich\UploaderBundle\Mapping\Annotation as Vich;
 
 trait PaymentEntityTrait
 {
@@ -20,6 +22,9 @@ trait PaymentEntityTrait
     #[ORM\Column(type: 'string', length: 255, nullable: true)]
     private ?string $status = null;
 
+    #[ORM\Column(type: 'string', length: 50)]
+    private string $provider = 'stripe';
+
     #[ORM\Column(type: 'decimal', precision: 10, scale: 2)]
     private float $amount;
 
@@ -28,6 +33,15 @@ trait PaymentEntityTrait
 
     #[ORM\Column(type: 'decimal', precision: 10, scale: 2)]
     private float $balanceAmount;
+
+    #[ORM\Column(type: 'text', nullable: true)]
+    private ?string $manualInstructions = null;
+
+    #[ORM\Column(type: 'string', length: 255, nullable: true)]
+    private ?string $manualProofPath = null;
+
+    #[Vich\UploadableField(mapping: 'manual_payment_proofs', fileNameProperty: 'manualProofPath')]
+    private ?File $manualProofFile = null;
 
     #[ORM\ManyToOne(targetEntity: Voucher::class)]
     #[ORM\JoinColumn(name: 'used_voucher', nullable: true)]
@@ -82,6 +96,17 @@ trait PaymentEntityTrait
         return $this;
     }
 
+    public function getProvider(): string
+    {
+        return $this->provider;
+    }
+
+    public function setProvider(string $provider): self
+    {
+        $this->provider = $provider;
+        return $this;
+    }
+
     public function getAmount(): float
     {
         return $this->amount;
@@ -113,6 +138,41 @@ trait PaymentEntityTrait
     {
         $this->balanceAmount = $balanceAmount;
         return $this;
+    }
+
+    public function getManualInstructions(): ?string
+    {
+        return $this->manualInstructions;
+    }
+
+    public function setManualInstructions(?string $manualInstructions): self
+    {
+        $this->manualInstructions = $manualInstructions;
+        return $this;
+    }
+
+    public function getManualProofPath(): ?string
+    {
+        return $this->manualProofPath;
+    }
+
+    public function setManualProofPath(?string $manualProofPath): self
+    {
+        $this->manualProofPath = $manualProofPath;
+        return $this;
+    }
+
+    public function getManualProofFile(): ?File
+    {
+        return $this->manualProofFile;
+    }
+
+    public function setManualProofFile(?File $manualProofFile = null): void
+    {
+        $this->manualProofFile = $manualProofFile;
+        if (null !== $manualProofFile) {
+            $this->updatedAt = new \DateTime();
+        }
     }
 
     public function getUsedVoucher(): ?Voucher

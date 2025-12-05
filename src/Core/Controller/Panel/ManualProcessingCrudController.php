@@ -1,27 +1,33 @@
 <?php
+
 namespace App\Core\Controller\Panel;
 
 use App\Core\Entity\Payment;
 use App\Core\Enum\CrudTemplateContextEnum;
+use App\Core\Enum\PaymentStatusEnum;
 use App\Core\Enum\UserRoleEnum;
 use App\Core\Service\Crud\PanelCrudService;
+use App\Core\Service\Payment\PaymentService;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Action;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Actions;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Crud;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Filters;
+use EasyCorp\Bundle\EasyAdminBundle\Context\AdminContext;
 use EasyCorp\Bundle\EasyAdminBundle\Field\AssociationField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\DateTimeField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\IdField;
+use EasyCorp\Bundle\EasyAdminBundle\Field\ImageField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\NumberField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\TextField;
-use EasyCorp\Bundle\EasyAdminBundle\Field\ImageField;
+use Symfony\Component\HttpFoundation\RedirectResponse;
 use Symfony\Contracts\Translation\TranslatorInterface;
 
-class PaymentCrudController extends AbstractPanelController
+class ManualProcessingCrudController extends AbstractPanelController
 {
     public function __construct(
         PanelCrudService $panelCrudService,
         private readonly TranslatorInterface $translator,
+        private readonly PaymentService $paymentService,
     ) {
         parent::__construct($panelCrudService);
     }
@@ -29,6 +35,26 @@ class PaymentCrudController extends AbstractPanelController
     public static function getEntityFqcn(): string
     {
         return Payment::class;
+    }
+
+    public function approveManual(AdminContext $context): RedirectResponse
+    {
+        $entity = $context->getEntity()->getInstance();
+        if (!$entity instanceof Payment) {
+            throw new \Exception('Invalid entity type');
+        }
+
+        $error = $this->paymentService->approveManualPayment($entity);
+        if (!empty($error)) {
+            $this->addFlash('danger', $error);
+        } else {
+            $this->addFlash('success', $this->translator->trans('pteroca.manual_processing.approved'));
+        }
+
+        return $this->redirectToRoute('panel', [
+            'crudAction' => 'index',
+            'crudControllerFqcn' => self::class,
+        ]);
     }
 
     public function configureFields(string $pageName): iterable
@@ -63,10 +89,17 @@ class PaymentCrudController extends AbstractPanelController
 
     public function configureActions(Actions $actions): Actions
     {
+        $approve = Action::new('approveManual', $this->translator->trans('pteroca.manual_processing.approve'), 'fa fa-check')
+            ->linkToCrudAction('approveManual')
+            ->displayIf(static function (Payment $payment) {
+                return $payment->getProvider() === 'manual' && $payment->getStatus() !== PaymentStatusEnum::PAID->value;
+            });
+
         return $actions
             ->disable(Action::NEW, Action::EDIT, Action::DELETE)
             ->add(Crud::PAGE_INDEX, Action::DETAIL)
-            ;
+            ->add(Crud::PAGE_INDEX, $approve)
+        ;
     }
 
     public function configureCrud(Crud $crud): Crud
@@ -74,11 +107,12 @@ class PaymentCrudController extends AbstractPanelController
         $this->appendCrudTemplateContext(CrudTemplateContextEnum::PAYMENT->value);
 
         $crud
-            ->setEntityLabelInSingular($this->translator->trans('pteroca.crud.payment.payment'))
-            ->setEntityLabelInPlural($this->translator->trans('pteroca.crud.payment.payments'))
+            ->setEntityLabelInSingular($this->translator->trans('pteroca.manual_processing.item'))
+            ->setEntityLabelInPlural($this->translator->trans('pteroca.manual_processing.items'))
             ->setEntityPermission(UserRoleEnum::ROLE_ADMIN->name)
             ->setDefaultSort(['createdAt' => 'DESC'])
-            ->showEntityActionsInlined();
+            ->showEntityActionsInlined()
+        ;
 
         return parent::configureCrud($crud);
     }
@@ -86,17 +120,15 @@ class PaymentCrudController extends AbstractPanelController
     public function configureFilters(Filters $filters): Filters
     {
         $filters
-            ->add('sessionId')
-            ->add('status')
             ->add('provider')
+            ->add('status')
             ->add('user')
             ->add('amount')
             ->add('currency')
-            ->add('balanceAmount')
-            ->add('usedVoucher')
             ->add('createdAt')
             ->add('updatedAt')
         ;
         return parent::configureFilters($filters);
     }
 }
+

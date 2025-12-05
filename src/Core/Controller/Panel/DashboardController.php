@@ -20,6 +20,7 @@ use App\Core\Entity\ServerLog;
 use App\Core\Entity\User;
 use App\Core\Entity\Voucher;
 use App\Core\Entity\VoucherUsage;
+use App\Core\Controller\Panel\ManualProcessingCrudController;
 use App\Core\Enum\SettingContextEnum;
 use App\Core\Enum\SettingEnum;
 use App\Core\Enum\UserRoleEnum;
@@ -118,6 +119,14 @@ class DashboardController extends AbstractDashboardController
             ]);
             yield MenuItem::linkToCrud($this->translator->trans('pteroca.crud.menu.servers'), 'fa fa-server', Server::class);
             yield MenuItem::linkToCrud($this->translator->trans('pteroca.crud.menu.payments'), 'fa fa-money', Payment::class);
+            yield MenuItem::linkToUrl(
+                $this->translator->trans('pteroca.crud.menu.manual_processing'),
+                'fa fa-hand-holding-dollar',
+                $this->generateUrl('panel', [
+                    'crudAction' => 'index',
+                    'crudControllerFqcn' => ManualProcessingCrudController::class,
+                ])
+            );
             yield MenuItem::subMenu($this->translator->trans('pteroca.crud.menu.logs'), 'fa fa-bars-staggered')->setSubItems([
                 MenuItem::linkToCrud($this->translator->trans('pteroca.crud.menu.logs'), 'fa fa-bars-staggered', Log::class),
                 MenuItem::linkToCrud($this->translator->trans('pteroca.crud.menu.email_logs'), 'fa fa-envelope', EmailLog::class),

@@ -115,6 +115,9 @@ pteroca:
     view_transaction_history: 'View transaction history'
     view_all_payments_description: 'View all payments that have been made on your account.'
     amount_must_be_positive: 'The amount must be positive.'
+    manual_payment_created: 'Manual payment submitted and awaits approval.'
+    manual_payment_disabled: 'Manual payments are currently disabled.'
+    proof_required: 'Payment proof is required for manual payments.'
 
   product:
     information: 'Information'
@@ -201,6 +204,9 @@ pteroca:
     order_description: 'Top up funds'
     payment_method: 'Payment method'
     description: 'Recharge your account balance'
+    manual_payment: 'Manual Payment'
+    manual_instructions: 'Manual Payment Instructions'
+    upload_proof: 'Upload Payment Proof'
   cart_renew:
     title: 'Renew your server'
     description: 'Extend your server to avoid suspension or deletion.'
@@ -880,6 +886,9 @@ pteroca:
       description: 'Manage your payments and view transaction history'
       continue_payment: 'Continue payment'
       detail: 'Detail'
+      provider: 'Provider'
+      manual_instructions: 'Manual instructions'
+      manual_proof: 'Payment proof'
     user_account:
       description: 'Edit your personal data, change password and manage account settings'
     log:
@@ -966,6 +975,7 @@ pteroca:
       voucher_usages: 'Redeemed vouchers'
       my_account: 'My account'
       account_settings: 'Account settings'
+      manual_processing: 'Manual processing'
 
   api:
     servers:
@@ -1197,3 +1207,9 @@ pteroca:
       message: 'Sorry, an unexpected error occurred. Please try again in a moment.'
       go_home: 'Home page'
       go_back: 'Go back'
+  manual_processing:
+    approve: 'Approve'
+    approved: 'Payment approved successfully.'
+    invalid_provider: 'Only manual payments can be approved here.'
+    missing_proof: 'Payment proof is required before approval.'
+    already_paid: 'This payment has already been approved.'

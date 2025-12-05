@@ -22,6 +22,9 @@ enum SettingEnum: string
     case SHOW_PTERODACTYL_LOGS_IN_SERVER_ACTIVITY = 'show_pterodactyl_logs_in_server_activity';
     case STRIPE_SECRET_KEY = 'stripe_secret_key';
     case STRIPE_PAYMENT_METHODS = 'stripe_payment_methods';
+    case MANUAL_PAYMENT_ENABLED = 'manual_payment_enabled';
+    case MANUAL_PAYMENT_INSTRUCTIONS = 'manual_payment_instructions';
+    case MANUAL_PAYMENT_REQUIRE_PROOF = 'manual_payment_require_proof';
     case INTERNAL_CURRENCY_NAME = 'internal_currency_name';
     case CURRENCY_NAME = 'currency_name';
     case DEFAULT_THEME_PRIMARY_COLOR = 'theme_default_primary_color';
@@ -55,4 +58,7 @@ enum SettingEnum: string
     case RENEWAL_NOTIFICATION_ON_DEMAND_MIN_HOURS = 'renewal_notification_on_demand_min_hours';
     case LOG_CLEANUP_ENABLED = 'log_cleanup_enabled';
     case LOG_CLEANUP_DAYS_AFTER = 'log_cleanup_days_after';
+    case MANUAL_PAYMENT_ENABLED = 'manual_payment_enabled';
+    case MANUAL_PAYMENT_INSTRUCTIONS = 'manual_payment_instructions';
+    case MANUAL_PAYMENT_REQUIRE_PROOF = 'manual_payment_require_proof';
 }

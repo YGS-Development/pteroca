@@ -73,6 +73,39 @@ class CartController extends AbstractController
 
         if ($request->isMethod('POST')) {
             try {
+                $provider = $requestPayload['payment_provider'] ?? 'stripe';
+                if ($provider === 'manual') {
+                    $enabled = $settingService->getSetting(SettingEnum::MANUAL_PAYMENT_ENABLED->value);
+                    if (!$enabled) {
+                        $this->addFlash('danger', $this->translator->trans('pteroca.recharge.manual_payment_disabled'));
+                        return $this->redirectToRoute('panel', [
+                            'routeName' => 'recharge_balance',
+                        ]);
+                    }
+
+                    $proofRequired = (bool) $settingService->getSetting(SettingEnum::MANUAL_PAYMENT_REQUIRE_PROOF->value);
+                    $proofFile = $request->files->get('manual_proof');
+                    if ($proofRequired && empty($proofFile)) {
+                        $this->addFlash('danger', $this->translator->trans('pteroca.recharge.proof_required'));
+                        return $this->redirectToRoute('panel', [
+                            'routeName' => 'recharge_balance',
+                        ]);
+                    }
+
+                    $paymentService->createManualPayment(
+                        $this->getUser(),
+                        (float) $requestPayload['amount'],
+                        $currency,
+                        $requestPayload['voucher'] ?? '',
+                        $proofFile,
+                    );
+
+                    $this->addFlash('success', $this->translator->trans('pteroca.recharge.manual_payment_created'));
+                    return $this->redirectToRoute('panel', [
+                        'routeName' => 'recharge_balance',
+                    ]);
+                }
+
                 $paymentUrl = $paymentService->createPayment(
                     $this->getUser(),
                     $requestPayload['amount'],
@@ -90,6 +123,9 @@ class CartController extends AbstractController
 
         return $this->render('panel/cart/topup.html.twig', [
             'request' => $requestPayload,
+            'manualPaymentEnabled' => (bool) $settingService->getSetting(SettingEnum::MANUAL_PAYMENT_ENABLED->value),
+            'manualInstructions' => $settingService->getSetting(SettingEnum::MANUAL_PAYMENT_INSTRUCTIONS->value),
+            'manualProofRequired' => (bool) $settingService->getSetting(SettingEnum::MANUAL_PAYMENT_REQUIRE_PROOF->value),
         ]);
     }
 
